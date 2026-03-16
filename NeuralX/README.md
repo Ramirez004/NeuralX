@@ -1,119 +1,194 @@
-NeuralX Language 
+# NeuralX — DSL para Deep Learning
 
-Learning, desarrollado con ANTLR4 y Python. 
-Este proyecto fue realizado con fines académicos para poder entender y practicar con la construcción de los lenguajes. 
+Lenguaje de dominio específico implementado con ANTLRv4 y Python usando el patrón Visitor.
 
-## 1. Estructura del proyecto 
-Neuralx
-1.	Nueralx.g4 
-2.	NeutralXVisitorImpl.py 
-3.	main.py 
-4.	README
-## 1.1 Descripción de cada documento 
-NeuralX.g4 
-Este archivo contiene la gramática en donde se define las reglas léxicas y sintácticas. 
-NeuralXVisitorImpl.py 
-Este archivo implementa la lógica del lenguaje usando Visitor. 
-main.py 
-Este es el archivo principal que ejecuta el parser y el Visitor. 
-README
-Escrito con la explicación del proyecto.
-## 2. Lógica del lenguaje
-NeutralX fue diseñado para interpretar instrucciones relacionadas con operación de Deep Learning en donde se divide en: 
+---
 
-## 2.1 Léxico 
-Aquí se definen: 
-•	Palabras reservadas 
-•	Identificadores 
-•	Numeros 
-•	Simbolos
-Ejemplo: 
-ID: [a-zA-Z]+ ;
-NUM: [0-9]+ ;
-## 2.2 Sintaxis 
-Se define las reglas del lenguaje. 
-Ejemplo:
-program
-: statement+ ;
+## Archivos del proyecto
 
-statement
-: assign
-| print
-;
+| Archivo | Descripción |
+|---|---|
+| `NeuralX.g4` | Gramática del lenguaje — define tokens y reglas sintácticas |
+| `NeuralXVisitorImpl.py` | Visitor — interpreta el AST y ejecuta cada operación |
+| `main.py` | Punto de entrada — conecta Lexer, Parser y Visitor |
+| `pruebas.nx` | Archivo de pruebas escrito en NeuralX |
 
-assign
-: ID '=' NUM ;
+Archivos generados automáticamente por ANTLR (no editar):
 
-print
-: 'print' ID ;
+| Archivo | Descripción |
+|---|---|
+| `NeuralXLexer.py` | Convierte el texto en tokens |
+| `NeuralXParser.py` | Construye el árbol de sintaxis (AST) |
+| `NeuralXVisitor.py` | Clase base del Visitor |
+| `NeuralXListener.py` | No se usa en este proyecto |
 
-Esto indica que el lenguaje permite:
+---
 
-- Asignar valores
-- Imprimir valores
-## 2.3 Visitor 
-Aquí de define la lógica de ejecución. 
-Ejemplo: 
-•	Guardar variables
-•	Imprimir resultados 
-•	Ejecutar instrucciones 
-Ejemplo:
-Usar un diccionario para almacenar valores. 
-self.memory = {}
+## Requisitos
 
-Cuando se asigna:
+- Python 3.8+
+- Java 11+ (requerido por ANTLR)
 
-x = 5
+---
 
-Se guarda:
+## Instalación
 
-memory["x"] = 5
+**Paso 1 — Crear y activar el entorno virtual**
+```bash
+python3 -m venv neuralx-env
+source neuralx-env/bin/activate
+```
 
-Cuando se imprime:
+**Paso 2 — Instalar dependencias**
+```bash
+pip install antlr4-python3-runtime==4.13.1
+pip install numpy matplotlib scikit-learn
+pip install antlr4-tools
+```
 
-print x
+---
 
-Se busca en memoria y se muestra.
-## 2.4 Programa principal (main) 
-Este archivo: 
-•	Lee el código fuente
-•	Ejecuta el lexer 
-•	Ejecuta el parser 
-•	Ejecuta el visitor
-Input → Lexer → Parser → Tree → Visitor → Resultado
-## 3 Compilación por consola
-•	Primero se genera el parser usando ANTLR.
-•	En la terminal, dentro de la carpeta del proyecto antlr4 -Dlanguage=Python3 NeuralX.g4
-•	Esto genera: 
-NeuralXLexer.py 
-NeuralXParser.py 
+## Generar el parser
+
+Este paso convierte `NeuralX.g4` en los archivos Python que necesita el proyecto.
+Solo se ejecuta una vez, o cada vez que se modifique el `.g4`.
+
+```bash
+antlr4 -Dlanguage=Python3 -visitor NeuralX.g4
+```
+
+Archivos que genera:
+```
+NeuralXLexer.py
+NeuralXParser.py
 NeuralXVisitor.py
-## 4 Ejecutar el programa
-Ejecutar Python3 main.py, ejecutando el intérprete del lenguaje. 
-## 5. USO 
-Ejemplo: 
-x = 10 
-y = 100 
-print x 
-print y 
-Salida esperada: 
-10 
-20 
-## 6. Explicación del funcionamiento 
-Este proceso simula el funcionamiento del compilador.
-•	El código se lee desde consola o archivo. 
-•	ANTLR analiza la gramática. 
-•	Se genera el árbol sintáctico. 
-•	El visitor recorre el árbol. 
-•	Se ejecutan las instrucciones. 
-## 7. Conceptos 
-•	ANTLR4
-•	Parser 
-•	Lexer
-•	Visitor 
-•	Árbol sintáctico 
-•	Deep Learning 
-## 8. Autor 
+NeuralXListener.py
+```
+
+---
+
+## Ejecutar
+
+**Modo REPL — escribir código línea por línea**
+```bash
+python main.py
+```
+
+Ejemplo:
+```
+NeuralX> var x = 5 + 3
+NeuralX> mostrar(x)
+8.0
+NeuralX> salir
+```
+
+**Modo archivo — ejecutar un archivo .nx**
+```bash
+python main.py pruebas.nx
+```
+
+---
+
+## Archivos de entrada
+
+`main.py` acepta archivos `.nx` — archivos de texto plano con código NeuralX.
+
+Ejemplo de archivo `.nx`:
+```
+var x = 10
+var y = 3
+var resultado = x * y
+mostrar(resultado)
+```
+
+---
+
+## Cada vez que abran una terminal nueva
+
+```bash
+source neuralx-env/bin/activate
+cd NeuralX
+python main.py
+```
+
+---
+
+## Documentación del código
+
+### NeuralX.g4
+
+Define la gramática completa del lenguaje NeuralX.
+
+- `prog` — regla de inicio, contiene todas las instrucciones
+- `instruccion` — cualquier instrucción válida del lenguaje
+- `declaracionVar` — declara una variable: `var x = expresion`
+- `expresion` — operaciones aritméticas con precedencia correcta
+- `lista` — lista de valores: `[1, 2, 3]`
+- `declaracionMatriz` — matriz: `mat[[1,2],[3,4]]`
+- `condicional` — bloque `si / sino`
+- `cicloFor` — ciclo `repite i en [0..n]`
+- `cicloWhile` — ciclo `mientras`
+- `instruccionML` — operaciones de machine learning
+- `instruccionPlot` — operaciones de graficación
+- `instruccionRed` — redes neuronales
+- `instruccionIO` — lectura y escritura de archivos
+
+---
+
+### NeuralXVisitorImpl.py
+
+Implementa el patrón Visitor sobre el AST generado por ANTLR.
+Cada método `visit` corresponde a una regla del `.g4`.
+
+**tabla** — diccionario Python que almacena las variables declaradas con `var`.
+
+| Método | Qué hace |
+|---|---|
+| `visitDeclaracionVar` | Guarda la variable en la tabla de símbolos |
+| `visitVariable` | Busca la variable en la tabla, error si no existe |
+| `visitSuma` | Evalúa `a + b` |
+| `visitResta` | Evalúa `a - b` |
+| `visitMultiplicacion` | Evalúa `a * b`, usa matmul si son matrices |
+| `visitDivision` | Evalúa `a / b`, error si divisor es 0 |
+| `visitPotencia` | Evalúa `a ^ b` |
+| `visitModuloOp` | Evalúa `a mod b` |
+| `visitSeno` | Evalúa `sen(x)` con math.sin |
+| `visitCoseno` | Evalúa `cos(x)` con math.cos |
+| `visitTangente` | Evalúa `tan(x)` con math.tan |
+| `visitNumero` | Convierte el texto "10" al número 10.0 |
+| `visitParentesis` | Evalúa la expresión dentro del paréntesis |
+| `visitListaExpr` | Construye una lista Python |
+| `visitMatrizExpr` | Construye un numpy array |
+| `visitTransponerExpr` | Transpone una matriz con numpy |
+| `visitInvertirExpr` | Invierte una matriz con numpy |
+| `visitAjustarExpr` | Entrena un modelo de regresión lineal con scikit-learn |
+| `visitClasificarExpr` | Entrena un modelo de regresión logística con scikit-learn |
+| `visitPredecirExpr` | Predice valores con un modelo entrenado |
+| `visitCoeficientesExpr` | Retorna pendiente e intercepto del modelo |
+| `visitInstruccionPlot` | Grafica con matplotlib |
+| `visitInstruccionRed` | Crea y entrena redes neuronales con keras/scikit-learn |
+| `visitInstruccionIO` | Lee y escribe archivos |
+| `visitCondicional` | Ejecuta bloque si/sino |
+| `visitCondicion` | Evalúa comparación >, <, == |
+| `visitCicloFor` | Ejecuta ciclo repite |
+| `visitCicloWhile` | Ejecuta ciclo mientras |
+| `visitImportacion` | Registra el módulo importado |
+
+---
+
+### main.py
+
+Punto de entrada del programa.
+
+**ErrorNeuralX** — manejador de errores de sintaxis. Captura errores de ANTLR y los muestra en español con línea y columna exacta.
+
+**ejecutar(codigo, visitor)** — recibe un string de código NeuralX, lo procesa con el Lexer y Parser, y lo ejecuta con el Visitor.
+
+**modo_archivo(ruta, visitor)** — lee un archivo `.nx` y lo ejecuta completo.
+
+**modo_repl(visitor)** — inicia el loop interactivo. Detecta bloques `{ }` y espera a que estén completos antes de ejecutar.
+
+## Autor 
 Proyecto académico 
 Construcción de DLS (Lenguaje de dominio especifico para realizar proceso de Deep Learning) 
 Autores: 
