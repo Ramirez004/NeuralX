@@ -1,0 +1,167 @@
+# nx_estructuras.py — Estructuras de datos propias de NeuralX
+# Sin imports externos. Todo implementado desde cero.
+
+
+class Lista:
+
+    def __init__(self):
+        self._datos = []
+        self._tam   = 0
+
+    def agregar(self, valor):
+        self._datos.append(valor)
+        self._tam += 1
+
+    def eliminar(self, indice):
+        indice = int(indice)
+        if indice < 0 or indice >= self._tam:
+            raise RuntimeError(
+                f"Lista.eliminar: índice {indice} fuera de rango [0,{self._tam-1}]"
+            )
+        self._datos = self._datos[:indice] + self._datos[indice + 1:]
+        self._tam -= 1
+
+    def obtener(self, indice):
+        indice = int(indice)
+        if indice < 0 or indice >= self._tam:
+            raise RuntimeError(
+                f"Lista.obtener: índice {indice} fuera de rango [0,{self._tam-1}]"
+            )
+        return self._datos[indice]
+
+    def longitud(self):
+        return self._tam
+
+    def contiene(self, valor):
+        for x in self._datos:
+            if x == valor:
+                return True
+        return False
+
+    def indice(self, valor):
+        for i, x in enumerate(self._datos):
+            if x == valor:
+                return i
+        return -1
+
+    def invertir(self):
+        nueva = Lista()
+        for i in range(self._tam - 1, -1, -1):
+            nueva.agregar(self._datos[i])
+        return nueva
+
+    def ordenar(self):
+        copia = self._datos[:]
+        _merge_sort(copia, 0, len(copia) - 1)
+        resultado = Lista()
+        for v in copia:
+            resultado.agregar(v)
+        return resultado
+
+    def a_lista_python(self):
+        return self._datos[:]
+
+    def __repr__(self):
+        return "[" + ", ".join(str(x) for x in self._datos) + "]"
+
+
+class Arreglo:
+
+    def __init__(self, tamanio, valor_inicial=0):
+        tamanio = int(tamanio)
+        if tamanio <= 0:
+            raise RuntimeError("Arreglo: tamaño debe ser positivo")
+        self._datos = [valor_inicial] * tamanio
+        self._tam   = tamanio
+
+    def obtener(self, indice):
+        indice = int(indice)
+        if indice < 0 or indice >= self._tam:
+            raise RuntimeError(
+                f"Arreglo.obtener: índice {indice} fuera de rango [0,{self._tam-1}]"
+            )
+        return self._datos[indice]
+
+    def asignar(self, indice, valor):
+        indice = int(indice)
+        if indice < 0 or indice >= self._tam:
+            raise RuntimeError(
+                f"Arreglo.asignar: índice {indice} fuera de rango [0,{self._tam-1}]"
+            )
+        self._datos[indice] = valor
+
+    def longitud(self):
+        return self._tam
+
+    def contiene(self, valor):
+        for x in self._datos:
+            if x == valor:
+                return True
+        return False
+
+    def ordenar(self):
+        copia = self._datos[:]
+        _merge_sort(copia, 0, len(copia) - 1)
+        arr = Arreglo(self._tam)
+        for i, v in enumerate(copia):
+            arr.asignar(i, v)
+        return arr
+
+    def a_lista_python(self):
+        return self._datos[:]
+
+    def eliminar(self, indice):
+        raise RuntimeError("Arreglo: tamaño fijo, no se puede eliminar")
+
+    def __repr__(self):
+        return "[" + ", ".join(str(x) for x in self._datos) + "]"
+
+
+# ── Algoritmos de ordenamiento ───────────────────────────────────────
+
+def _merge_sort(arr, izq, der):
+    if izq >= der:
+        return
+    mid = (izq + der) // 2
+    _merge_sort(arr, izq, mid)
+    _merge_sort(arr, mid + 1, der)
+    _merge(arr, izq, mid, der)
+
+
+def _merge(arr, izq, mid, der):
+    L = arr[izq:mid + 1]
+    R = arr[mid + 1:der + 1]
+    i = j = 0
+    k = izq
+    while i < len(L) and j < len(R):
+        if L[i] <= R[j]:
+            arr[k] = L[i]; i += 1
+        else:
+            arr[k] = R[j]; j += 1
+        k += 1
+    while i < len(L):
+        arr[k] = L[i]; i += 1; k += 1
+    while j < len(R):
+        arr[k] = R[j]; j += 1; k += 1
+
+
+def burbuja(arr):
+    a = arr[:]
+    n = len(a)
+    for i in range(n):
+        for j in range(0, n - i - 1):
+            if a[j] > a[j + 1]:
+                a[j], a[j + 1] = a[j + 1], a[j]
+    return a
+
+
+def insercion(arr):
+    a = arr[:]
+    for i in range(1, len(a)):
+        clave = a[i]
+        j = i - 1
+        while j >= 0 and a[j] > clave:
+            a[j + 1] = a[j]
+            j -= 1
+        a[j + 1] = clave
+    return a

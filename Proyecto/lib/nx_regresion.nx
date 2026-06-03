@@ -1,0 +1,337 @@
+# nx_regresion.py — Regresión Lineal y Logística propias de NeuralX
+# Sin dependencias externas. Usa nx_matrix internamente.
+
+from nx_matrix import Matriz
+
+
+# ── Utilidades matemáticas ───────────────────────────────────────────
+
+def _exp(x):
+    if x > 709:  return 1e308
+    if x < -709: return 0.0
+    r, t = 1.0, 1.0
+    for i in range(1, 150):
+        t *= x / i
+        r += t
+        if abs(t) < 1e-15:
+            break
+    return r
+
+def _sigmoid(x):
+    if x >= 0:
+        e = _exp(-x)
+        return 1.0 / (1.0 + e)
+    else:
+        e = _exp(x)
+        return e / (1.0 + e)
+
+def _log_seguro(x):
+    if x <= 0:
+        x = 1e-15
+    u = (x - 1) / (x + 1)
+    r, t, n = u, u, 1
+    for _ in range(500):
+        n += 2; t *= u * u; s = t / n; r += s
+        if abs(s) < 1e-15:
+            break
+    return 2 * r
+
+def _dot(a, b):
+    if len(a) != len(b):
+        raise RuntimeError("_dot: vectores de distinto tamaño")
+    return sum(a[i] * b[i] for i in range(len(a)))
+
+def _agregar_sesgo(X):
+    return [[1.0] + list(fila) for fila in X]
+
+def _normalizar(X):
+    if not X or not X[0]:
+        return X, [], []
+    cols  = len(X[0])
+    filas = len(X)
+    mins  = [min(X[i][j] for i in range(filas)) for j in range(cols)]
+    maxs  = [max(X[i][j] for i in range(filas)) for j in range(cols)]
+    rangos = [
+        maxs[j] - mins[j] if maxs[j] != mins[j] else 1.0
+        for j in range(cols)
+    ]
+    X_norm = [
+        [(X[i][j] - mins[j]) / rangos[j] for j in range(cols)]
+        for i in range(filas)
+    ]
+    return X_norm, mins, rangos
+
+def _aplicar_normalizacion(X, mins, rangos):
+    if not mins:
+        return X
+    return [
+        [(X[i][j] - mins[j]) / rangos[j] for j in range(len(X[0]))]
+        for i in range(len(X))
+    ]
+
+def _a_matriz_python(entrada):
+    from nx_estructuras import Lista, Arreglo
+    if isinstance(entrada, Matriz):
+        return [list(f) for f in entrada.datos]
+    if isinstance(entrada, (Lista, Arreglo)):
+        datos = entrada.a_lista_python()
+        if datos and not isinstance(datos[0], (list, Lista, Arreglo)):
+            return [[v] for v in datos]
+        return [list(f) if not hasattr(f, "a_lista_python")
+                else f.a_lista_python() for f in datos]
+    if isinstance(entrada, list):
+        if entrada and not isinstance(entrada[0], list):
+            return [[v] for v in entrada]
+        return entrada
+    raise RuntimeError("Entrada no reconocida para modelo")
+
+def _a_vector_python(entrada):
+    from nx_estructuras import Lista, Arreglo
+    if isinstance(entrada, Matriz):
+        if entrada.filas == 1:
+            return list(entrada.datos[0])
+        return [entrada.datos[i][0] for i in range(entrada.filas)]
+    if isinstance(entrada, (Lista, Arreglo)):
+        return entrada.a_lista_python()
+    if isinstance(entrada, list):
+        return entrada
+    raise RuntimeError("Vector objetivo no reconocido")
+
+
+# ── Regresión Lineal ─────────────────────────────────────────────────
+
+class RegresionLineal:
+
+    def __init__(self):
+        self.pesos      = []
+        self.n_features = 0
+        self._mins      = []
+        self._rangos    = []
+        self.mse        = None
+        self.r2         = None
+        self._entrenado = False
+
+    def entrenar(self, X_entrada, y_entrada, tasa=0.01):
+        X_raw = _a_matriz_python(X_entrada)
+        y     = _a_vector_python(y_entrada)
+        n     = len(X_raw)
+
+        if n == 0:
+            raise RuntimeError("regresionLineal: datos vacíos")
+        if n != len(y):
+            raise RuntimeError(
+                f"regresionLineal: X tiene {n} filas, y tiene {len(y)}"
+            )
+
+        X_norm, self._mins, self._rangos = _normalizar(X_raw)
+        X_sesgo         = _agregar_sesgo(X_norm)
+        self.n_features = len(X_raw[0])
+
+        try:
+            Xm      = Matriz(X_sesgo)
+            Xt      = Xm.transpuesta()
+            XtX     = Xt.multiplicacion(Xm)
+            Xty     = [_dot(Xt.datos[j], y) for j in range(len(Xt.datos))]
+            XtX_inv = XtX.inversa()
+            self.pesos = [
+                _dot(XtX_inv.datos[i], Xty)
+                for i in range(len(XtX_inv.datos))
+            ]
+        except RuntimeError:
+            self.pesos = [0.0] * (self.n_features + 1)
+            for _ in range(10000):
+                grads = [0.0] * len(self.pesos)
+                for i in range(n):
+                    pred  = _dot(self.pesos, X_sesgo[i])
+                    error = pred - y[i]
+                    for j in range(len(self.pesos)):
+                        grads[j] += error * X_sesgo[i][j]
+                self.pesos = [
+                    self.pesos[j] - tasa * grads[j] / n
+                    for j in range(len(self.pesos))
+                ]
+
+        preds    = [_dot(self.pesos, X_sesgo[i]) for i in range(n)]
+        residuos = [y[i] - preds[i] for i in range(n)]
+        self.mse = sum(r ** 2 for r in residuos) / n
+        y_media  = sum(y) / n
+        ss_tot   = sum((yi - y_media) ** 2 for yi in y)
+        ss_res   = sum(r ** 2 for r in residuos)
+        self.r2  = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        self._entrenado = True
+        print(f"[RegresionLineal] Entrenado — MSE: {self.mse:.6f}  R²: {self.r2:.6f}")
+
+    def predecir(self, X_entrada):
+        if not self._entrenado:
+            raise RuntimeError("predecirModelo: modelo no entrenado")
+        X_raw  = _a_matriz_python(X_entrada)
+        X_norm = _aplicar_normalizacion(X_raw, self._mins, self._rangos)
+        X_ses  = _agregar_sesgo(X_norm)
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for fila in X_ses:
+            resultado.agregar(_dot(self.pesos, fila))
+        return resultado
+
+    def evaluar(self, X_entrada, y_entrada, _unused=None):
+        if not self._entrenado:
+            raise RuntimeError("evaluar: modelo no entrenado")
+        X_raw  = _a_matriz_python(X_entrada)
+        y      = _a_vector_python(y_entrada)
+        X_norm = _aplicar_normalizacion(X_raw, self._mins, self._rangos)
+        X_ses  = _agregar_sesgo(X_norm)
+        preds  = [_dot(self.pesos, fila) for fila in X_ses]
+        mse    = sum((y[i] - preds[i]) ** 2 for i in range(len(y))) / len(y)
+        y_med  = sum(y) / len(y)
+        ss_tot = sum((yi - y_med) ** 2 for yi in y)
+        ss_res = sum((y[i] - preds[i]) ** 2 for i in range(len(y)))
+        r2     = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        print(f"[RegresionLineal] Evaluación — MSE: {mse:.6f}  R²: {r2:.6f}")
+        return r2
+
+    def coeficientes(self):
+        from nx_estructuras import Lista
+        r = Lista()
+        for p in self.pesos[1:]:
+            r.agregar(p)
+        return r
+
+    def intercepto(self):
+        return self.pesos[0] if self.pesos else 0.0
+
+    def error(self):
+        return self.mse
+
+    def __repr__(self):
+        estado = "entrenado" if self._entrenado else "sin entrenar"
+        return f"<RegresionLineal {estado}>"
+
+
+# ── Regresión Logística ──────────────────────────────────────────────
+
+class RegresionLogistica:
+
+    def __init__(self):
+        self.pesos      = []
+        self.n_features = 0
+        self._mins      = []
+        self._rangos    = []
+        self.log_loss   = None
+        self.precision  = None
+        self._entrenado = False
+
+    def entrenar(self, X_entrada, y_entrada, tasa=0.1):
+        X_raw = _a_matriz_python(X_entrada)
+        y     = _a_vector_python(y_entrada)
+        n     = len(X_raw)
+
+        if n == 0:
+            raise RuntimeError("regresionLogistica: datos vacíos")
+        if n != len(y):
+            raise RuntimeError(
+                f"regresionLogistica: X tiene {n} filas, y tiene {len(y)}"
+            )
+        if len(set(y)) > 2:
+            raise RuntimeError(
+                "regresionLogistica: solo soporta clasificación binaria (2 clases)"
+            )
+
+        X_norm, self._mins, self._rangos = _normalizar(X_raw)
+        X_ses           = _agregar_sesgo(X_norm)
+        self.n_features = len(X_raw[0])
+        self.pesos      = [0.0] * (self.n_features + 1)
+        loss_total      = 0.0
+
+        for it in range(10000):
+            grads      = [0.0] * len(self.pesos)
+            loss_total = 0.0
+            for i in range(n):
+                z     = _dot(self.pesos, X_ses[i])
+                pred  = _sigmoid(z)
+                error = pred - y[i]
+                loss_total += -(
+                    y[i] * _log_seguro(pred) +
+                    (1 - y[i]) * _log_seguro(1 - pred)
+                )
+                for j in range(len(self.pesos)):
+                    grads[j] += error * X_ses[i][j]
+            self.pesos = [
+                self.pesos[j] - tasa * grads[j] / n
+                for j in range(len(self.pesos))
+            ]
+            if (it + 1) % 1000 == 0:
+                tasa *= 0.9
+
+        self.log_loss   = loss_total / n
+        preds_clase     = [
+            1 if _sigmoid(_dot(self.pesos, X_ses[i])) >= 0.5 else 0
+            for i in range(n)
+        ]
+        correctos       = sum(1 for i in range(n) if preds_clase[i] == y[i])
+        self.precision  = correctos / n
+        self._entrenado = True
+        print(
+            f"[RegresionLogistica] Entrenada — "
+            f"Log-Loss: {self.log_loss:.6f}  "
+            f"Precisión: {self.precision*100:.2f}%"
+        )
+
+    def predecir(self, X_entrada, umbral=0.5):
+        if not self._entrenado:
+            raise RuntimeError("predecirModelo: modelo no entrenado")
+        X_raw  = _a_matriz_python(X_entrada)
+        X_norm = _aplicar_normalizacion(X_raw, self._mins, self._rangos)
+        X_ses  = _agregar_sesgo(X_norm)
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for fila in X_ses:
+            prob = _sigmoid(_dot(self.pesos, fila))
+            resultado.agregar(1 if prob >= umbral else 0)
+        return resultado
+
+    def evaluar(self, X_entrada, y_entrada, umbral=0.5):
+        if not self._entrenado:
+            raise RuntimeError("evaluar: modelo no entrenado")
+        X_raw  = _a_matriz_python(X_entrada)
+        y      = _a_vector_python(y_entrada)
+        X_norm = _aplicar_normalizacion(X_raw, self._mins, self._rangos)
+        X_ses  = _agregar_sesgo(X_norm)
+        n      = len(y)
+        vp = vn = fp = fn = 0
+        for i in range(n):
+            prob = _sigmoid(_dot(self.pesos, X_ses[i]))
+            pred = 1 if prob >= umbral else 0
+            real = int(y[i])
+            if pred == 1 and real == 1:   vp += 1
+            elif pred == 0 and real == 0: vn += 1
+            elif pred == 1 and real == 0: fp += 1
+            else:                         fn += 1
+        acc       = (vp + vn) / n if n > 0 else 0
+        precision = vp / (vp + fp) if (vp + fp) > 0 else 0
+        recall    = vp / (vp + fn) if (vp + fn) > 0 else 0
+        f1        = (2 * precision * recall / (precision + recall)
+                     if (precision + recall) > 0 else 0)
+        print(f"[RegresionLogistica] Evaluación:")
+        print(f"  Exactitud : {acc*100:.2f}%")
+        print(f"  Precisión : {precision*100:.2f}%")
+        print(f"  Recall    : {recall*100:.2f}%")
+        print(f"  F1-Score  : {f1:.4f}")
+        print(f"  VP={vp}  FP={fp}  FN={fn}  VN={vn}")
+        return acc
+
+    def coeficientes(self):
+        from nx_estructuras import Lista
+        r = Lista()
+        for p in self.pesos[1:]:
+            r.agregar(p)
+        return r
+
+    def intercepto(self):
+        return self.pesos[0] if self.pesos else 0.0
+
+    def error(self):
+        return self.log_loss
+
+    def __repr__(self):
+        estado = "entrenada" if self._entrenado else "sin entrenar"
+        return f"<RegresionLogistica {estado}>"

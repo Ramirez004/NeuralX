@@ -1,0 +1,116 @@
+# nx_math.py — Librería matemática propia de NeuralX
+# Sin imports externos. Todo implementado desde cero.
+
+PI = 3.141592653589793
+E  = 2.718281828459045
+
+
+def _sen(x):
+    x = x % (2 * PI)
+    resultado, termino, n = x, x, 1
+    for i in range(1, 50):
+        n += 2
+        termino *= -x * x / ((n - 1) * n)
+        resultado += termino
+        if abs(termino) < 1e-15:
+            break
+    return resultado
+
+
+def _cos(x):
+    x = x % (2 * PI)
+    resultado, termino, n = 1, 1, 0
+    for i in range(1, 50):
+        n += 2
+        termino *= -x * x / ((n - 1) * n)
+        resultado += termino
+        if abs(termino) < 1e-15:
+            break
+    return resultado
+
+
+def _tan(x):
+    c = _cos(x)
+    if abs(c) < 1e-12:
+        raise RuntimeError("tan: indefinida en este punto (cos = 0)")
+    return _sen(x) / c
+
+
+def _asen(x):
+    if x < -1 or x > 1:
+        raise RuntimeError("asen: dominio es [-1, 1]")
+    t = x
+    for _ in range(100):
+        c = _cos(t)
+        if abs(c) < 1e-12:
+            break
+        t -= (_sen(t) - x) / c
+    return t
+
+
+def _acos(x):
+    return PI / 2 - _asen(x)
+
+
+def _atan(x):
+    if abs(x) > 1:
+        signo = 1 if x > 0 else -1
+        return signo * (PI / 2) - _atan(1 / x)
+    resultado, termino, signo = x, x, -1
+    for i in range(1, 500):
+        termino *= x * x
+        t = termino / (2 * i + 1)
+        resultado += signo * t
+        signo *= -1
+        if abs(t) < 1e-15:
+            break
+    return resultado
+
+
+def _log(x):
+    if x <= 0:
+        raise RuntimeError("log: dominio es x > 0")
+    u = (x - 1) / (x + 1)
+    resultado, termino, n = u, u, 1
+    for _ in range(500):
+        n += 2
+        termino *= u * u
+        t = termino / n
+        resultado += t
+        if abs(t) < 1e-15:
+            break
+    return 2 * resultado
+
+
+def _log10(x):
+    return _log(x) / _log(10)
+
+
+def _raiz(x):
+    if x < 0:
+        raise RuntimeError("raiz: no definida para valores negativos")
+    return x ** 0.5
+
+
+def _abs(x):
+    return x if x >= 0 else -x
+
+
+def _piso(x):
+    n = int(x)
+    return n if x >= 0 or x == n else n - 1
+
+
+def _techo(x):
+    n = int(x)
+    return n if x == n else _piso(x) + 1
+
+
+def _redondear(x):
+    return _piso(x + 0.5)
+
+
+def _potencia(base, exp):
+    if base < 0 and not float(exp).is_integer():
+        raise RuntimeError("potencia: base negativa con exponente no entero")
+    return base ** exp

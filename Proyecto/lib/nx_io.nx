@@ -1,0 +1,197 @@
+# nx_io.py — Librería de manejo de archivos propia de NeuralX
+# Soporta .txt y .csv sin dependencias externas.
+
+
+def _leer_bytes(ruta):
+    with open(ruta, "r", encoding="utf-8") as f:
+        return f.read()
+
+def _escribir_bytes(ruta, contenido):
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write(contenido)
+
+def existe(ruta):
+    try:
+        with open(ruta, "r"):
+            pass
+        return True
+    except OSError:
+        return False
+
+
+class ArchivoTXT:
+
+    def __init__(self, ruta, modo):
+        modos_validos = ("r", "w", "a")
+        if modo not in modos_validos:
+            raise RuntimeError(
+                f"abrir: modo '{modo}' inválido. Use: 'r', 'w', 'a'"
+            )
+        self.ruta           = ruta
+        self.modo           = modo
+        self._lineas        = []
+        self._cursor        = 0
+        self._buffer_escr   = []
+        self._cerrado       = False
+
+        if modo in ("r", "a"):
+            self._cargar()
+
+    def _cargar(self):
+        try:
+            contenido    = _leer_bytes(self.ruta)
+            self._lineas = contenido.split("\n")
+        except OSError:
+            if self.modo == "r":
+                raise RuntimeError(f"abrir: no se encontró '{self.ruta}'")
+
+    def _verificar_abierto(self):
+        if self._cerrado:
+            raise RuntimeError(f"El archivo '{self.ruta}' ya fue cerrado")
+
+    def leer_todo(self):
+        self._verificar_abierto()
+        if self.modo != "r":
+            raise RuntimeError("leerTodo: archivo no está en modo lectura")
+        return "\n".join(self._lineas)
+
+    def leer_linea(self):
+        self._verificar_abierto()
+        if self.modo != "r":
+            raise RuntimeError("leerLinea: archivo no está en modo lectura")
+        if self._cursor >= len(self._lineas):
+            return ""
+        linea = self._lineas[self._cursor]
+        self._cursor += 1
+        return linea
+
+    def lineas(self):
+        self._verificar_abierto()
+        if self.modo != "r":
+            raise RuntimeError("lineas: archivo no está en modo lectura")
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for l in self._lineas:
+            resultado.agregar(l)
+        return resultado
+
+    def escribir(self, texto):
+        self._verificar_abierto()
+        if self.modo not in ("w", "a"):
+            raise RuntimeError("escribir: archivo no está en modo escritura")
+        self._buffer_escr.append(str(texto))
+
+    def cerrar(self):
+        self._verificar_abierto()
+        if self.modo in ("w", "a"):
+            contenido_prev = "\n".join(self._lineas) if self.modo == "a" else ""
+            nuevo          = "\n".join(self._buffer_escr)
+            if self.modo == "a" and contenido_prev:
+                final = contenido_prev + "\n" + nuevo
+            else:
+                final = nuevo
+            _escribir_bytes(self.ruta, final)
+        self._cerrado = True
+        print(f"[NeuralX IO] Archivo '{self.ruta}' cerrado.")
+
+    def __repr__(self):
+        return f"<ArchivoTXT '{self.ruta}' modo='{self.modo}'>"
+
+
+class ArchivoCSV:
+
+    def __init__(self, ruta, separador=","):
+        self.ruta       = ruta
+        self.separador  = separador
+        self._cabecera  = []
+        self._filas     = []
+        self._cargar()
+
+    def _cargar(self):
+        try:
+            contenido = _leer_bytes(self.ruta)
+        except OSError:
+            raise RuntimeError(f"leerCSV: no se encontró '{self.ruta}'")
+        lineas = [l for l in contenido.split("\n") if l.strip()]
+        if not lineas:
+            raise RuntimeError(f"leerCSV: archivo '{self.ruta}' vacío")
+        self._cabecera = self._parsear_linea(lineas[0])
+        for linea in lineas[1:]:
+            self._filas.append(self._parsear_linea(linea))
+
+    def _parsear_linea(self, linea):
+        campos         = []
+        actual         = ""
+        entre_comillas = False
+        for c in linea:
+            if c == '"':
+                entre_comillas = not entre_comillas
+            elif c == self.separador and not entre_comillas:
+                campos.append(self._convertir(actual.strip()))
+                actual = ""
+            else:
+                actual += c
+        campos.append(self._convertir(actual.strip()))
+        return campos
+
+    def _convertir(self, valor):
+        try:
+            return float(valor) if "." in valor else int(valor)
+        except ValueError:
+            return valor
+
+    def columnas(self):
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for c in self._cabecera:
+            resultado.agregar(c)
+        return resultado
+
+    def fila(self, indice):
+        indice = int(indice)
+        if indice < 0 or indice >= len(self._filas):
+            raise RuntimeError(
+                f"filaCSV: índice {indice} fuera de rango [0,{len(self._filas)-1}]"
+            )
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for v in self._filas[indice]:
+            resultado.agregar(v)
+        return resultado
+
+    def columna(self, nombre):
+        if nombre not in self._cabecera:
+            raise RuntimeError(f"columnasCSV: columna '{nombre}' no existe")
+        idx = self._cabecera.index(nombre)
+        from nx_estructuras import Lista
+        resultado = Lista()
+        for fila in self._filas:
+            resultado.agregar(fila[idx] if idx < len(fila) else None)
+        return resultado
+
+    def total_filas(self):
+        return len(self._filas)
+
+    def __repr__(self):
+        return (
+            f"<ArchivoCSV '{self.ruta}' "
+            f"filas={len(self._filas)} columnas={self._cabecera}>"
+        )
+
+
+class EscritorCSV:
+
+    def __init__(self, ruta, separador=","):
+        self.ruta      = ruta
+        self.separador = separador
+        self._filas    = []
+
+    def agregar_fila(self, fila):
+        if hasattr(fila, "a_lista_python"):
+            fila = fila.a_lista_python()
+        self._filas.append([str(v) for v in fila])
+
+    def guardar(self):
+        lineas = [self.separador.join(f) for f in self._filas]
+        _escribir_bytes(self.ruta, "\n".join(lineas))
+        print(f"[NeuralX IO] CSV guardado en '{self.ruta}'")
