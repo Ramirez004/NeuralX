@@ -1,0 +1,68 @@
+// prueba.nx — Prueba integral de NeuralX
+
+// ── Aritmética
+var x = 2 ^ 8
+mostrar(x)
+var s = sen(3.14159)
+mostrar(s)
+var r = raiz(144)
+mostrar(r)
+
+// ── Matrices
+var M = mat[[1,2],[3,4]]
+mostrar(transponer(M))
+mostrar(det(M))
+
+// ── Lista
+var L = Lista()
+agregar(L, 10)
+agregar(L, 5)
+agregar(L, 8)
+mostrar(ordenar(L))
+
+// ── Condicional
+var nota = 85
+si (nota >= 90) {
+    mostrar("Excelente")
+} sino si (nota >= 70) {
+    mostrar("Aprobado")
+} sino {
+    mostrar("Reprobado")
+}
+
+// ── Ciclo for rango
+var acum = 0
+repite i en [1..5] {
+    var acum = acum + i
+}
+mostrar(acum)
+
+// ── Función
+funcion cuadrado(n) {
+    retornar n * n
+}
+mostrar(cuadrado(7))
+
+// ── Regresión lineal
+var Xrl = mat[[1],[2],[3],[4],[5]]
+var yrl = mat[[2,4,6,8,10]]
+var rl = regresionLineal()
+entrenarModelo(rl, Xrl, yrl)
+mostrar(predecirModelo(rl, mat[[6]]))
+
+// ── MLP clasificador XOR
+var Xm = mat[[0,0],[0,1],[1,0],[1,1]]
+var ym = mat[[0,1,1,0]]
+var mlp1 = mlp()
+capaDensa(mlp1, 8, "relu")
+capaDensa(mlp1, 2, "softmax")
+compilar(mlp1, 0.01, 100, "clasificacion")
+entrenarModelo(mlp1, Xm, ym)
+evaluar(mlp1, Xm, ym)
+
+// ── KMeans — tercer arg requerido por gramatica (se ignora en agrupamiento)
+var datos = mat[[1,2],[1,4],[1,0],[10,2],[10,4],[10,0]]
+var km = kMeans(2)
+entrenarModelo(km, datos, datos)
+mostrar(etiquetas(km))
+mostrar(inercia(km))

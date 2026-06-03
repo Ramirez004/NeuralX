@@ -1,0 +1,385 @@
+# nx_plot.py — Librería gráfica propia de NeuralX
+# Renderizado ASCII en consola + exportación SVG sin dependencias externas.
+
+ANCHO  = 70
+ALTO   = 22
+MARCAS = ["*", "o", "+", "x", "@", "#", "%", "&"]
+
+SVG_W, SVG_H = 600, 420
+PAD_L, PAD_R = 60, 20
+PAD_T, PAD_B = 40, 50
+COLORES_SVG  = [
+    "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
+    "#9b59b6", "#1abc9c", "#e67e22", "#34495e"
+]
+
+
+class Lienzo:
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.series              = []
+        self.titulo              = ""
+        self.etiqueta_x          = ""
+        self.etiqueta_y          = ""
+        self.mostrar_leyenda     = False
+        self.mostrar_cuadricula  = False
+        self.rango_x             = None
+        self.rango_y             = None
+        self.etiqueta_actual     = None
+
+    def agregar_serie(self, tipo, xs, ys, color="*", etiqueta=None):
+        self.series.append({
+            "tipo"     : tipo,
+            "xs"       : xs,
+            "ys"       : ys,
+            "color"    : color,
+            "etiqueta" : etiqueta or self.etiqueta_actual,
+        })
+        self.etiqueta_actual = None
+
+
+_lienzo = Lienzo()
+
+
+# ── API pública ──────────────────────────────────────────────────────
+
+def graficar(xs, ys, color="*"):
+    _lienzo.agregar_serie("linea", _a_lista(xs), _a_lista(ys), color)
+
+def dispersar(xs, ys, color="o"):
+    _lienzo.agregar_serie("dispersion", _a_lista(xs), _a_lista(ys), color)
+
+def barras(etiquetas, valores, color="#"):
+    _lienzo.agregar_serie("barras", _a_lista(etiquetas), _a_lista(valores), color)
+
+def histograma(datos, bins):
+    datos = _a_lista(datos)
+    bins  = int(bins)
+    conteos, bordes = _calcular_histograma(datos, bins)
+    _lienzo.agregar_serie("histograma", bordes, conteos, "#")
+
+def titulo(texto):
+    _lienzo.titulo = texto
+
+def eje_x(texto):
+    _lienzo.etiqueta_x = texto
+
+def eje_y(texto):
+    _lienzo.etiqueta_y = texto
+
+def etiqueta(texto):
+    _lienzo.etiqueta_actual = texto
+
+def leyenda():
+    _lienzo.mostrar_leyenda = True
+
+def cuadricula():
+    _lienzo.mostrar_cuadricula = True
+
+def rango_x(minv, maxv):
+    _lienzo.rango_x = (minv, maxv)
+
+def rango_y(minv, maxv):
+    _lienzo.rango_y = (minv, maxv)
+
+def limpiar():
+    _lienzo.reset()
+
+def mostrar():
+    _renderizar_ascii(_lienzo)
+    _lienzo.reset()
+
+def guardar_grafica(ruta):
+    svg = _generar_svg(_lienzo)
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write(svg)
+    print(f"[NeuralX] Gráfica guardada en: {ruta}")
+    _lienzo.reset()
+
+
+# ── Utilidades internas ──────────────────────────────────────────────
+
+def _a_lista(col):
+    if hasattr(col, "a_lista_python"):
+        return col.a_lista_python()
+    if hasattr(col, "datos"):
+        return col.datos[0]
+    return list(col)
+
+def _calcular_histograma(datos, bins):
+    minv = min(datos)
+    maxv = max(datos)
+    if minv == maxv:
+        return [len(datos)], [minv, maxv]
+    ancho   = (maxv - minv) / bins
+    conteos = [0] * bins
+    for v in datos:
+        idx = int((v - minv) / ancho)
+        if idx == bins:
+            idx -= 1
+        conteos[idx] += 1
+    bordes = [minv + i * ancho for i in range(bins + 1)]
+    return conteos, bordes
+
+def _min_max_serie(serie):
+    xs     = serie["xs"]
+    ys     = serie["ys"]
+    xs_num = [x if isinstance(x, (int, float)) else i for i, x in enumerate(xs)]
+    return min(xs_num), max(xs_num), min(ys), max(ys)
+
+def _calcular_limites(lienzo):
+    todos_x, todos_y = [], []
+    for s in lienzo.series:
+        mn_x, mx_x, mn_y, mx_y = _min_max_serie(s)
+        todos_x += [mn_x, mx_x]
+        todos_y += [mn_y, mx_y]
+    rx = lienzo.rango_x or (min(todos_x), max(todos_x))
+    ry = lienzo.rango_y or (min(todos_y), max(todos_y))
+    if rx[0] == rx[1]:
+        rx = (rx[0] - 1, rx[1] + 1)
+    if ry[0] == ry[1]:
+        ry = (ry[0] - 1, ry[1] + 1)
+    return rx, ry
+
+
+# ── Renderizado ASCII ────────────────────────────────────────────────
+
+def _renderizar_ascii(lienzo):
+    if not lienzo.series:
+        print("[NeuralX Plot] Sin datos para graficar.")
+        return
+
+    rx, ry = _calcular_limites(lienzo)
+    grid   = [[" "] * ANCHO for _ in range(ALTO)]
+
+    if lienzo.mostrar_cuadricula:
+        for fila in range(0, ALTO, 4):
+            for col in range(ANCHO):
+                grid[fila][col] = "·"
+        for col in range(0, ANCHO, 8):
+            for fila in range(ALTO):
+                grid[fila][col] = "·"
+
+    def _mapear(x, y):
+        cx = int((x - rx[0]) / (rx[1] - rx[0]) * (ANCHO - 1))
+        cy = ALTO - 1 - int((y - ry[0]) / (ry[1] - ry[0]) * (ALTO - 1))
+        return max(0, min(ANCHO - 1, cx)), max(0, min(ALTO - 1, cy))
+
+    for idx, serie in enumerate(lienzo.series):
+        marca  = serie["color"] if len(serie["color"]) == 1 \
+                 else MARCAS[idx % len(MARCAS)]
+        tipo   = serie["tipo"]
+        xs     = serie["xs"]
+        ys     = serie["ys"]
+        xs_num = [x if isinstance(x, (int, float)) else i
+                  for i, x in enumerate(xs)]
+
+        if tipo in ("linea", "dispersion"):
+            puntos = list(zip(xs_num, ys))
+            if tipo == "linea":
+                puntos.sort(key=lambda p: p[0])
+                for k in range(len(puntos) - 1):
+                    x0, y0 = puntos[k]
+                    x1, y1 = puntos[k + 1]
+                    pasos  = max(abs(int(_mapear(x1, y1)[0] - _mapear(x0, y0)[0])), 1)
+                    for t in range(pasos + 1):
+                        xi = x0 + (x1 - x0) * t / pasos
+                        yi = y0 + (y1 - y0) * t / pasos
+                        cx, cy = _mapear(xi, yi)
+                        grid[cy][cx] = marca
+            else:
+                for x, y in puntos:
+                    cx, cy = _mapear(x, y)
+                    grid[cy][cx] = marca
+
+        elif tipo == "barras":
+            n          = len(ys)
+            ancho_b    = max(1, (ANCHO - 2) // n)
+            for i, val in enumerate(ys):
+                col_ini    = 1 + i * ancho_b
+                _, cy_base = _mapear(0, ry[0])
+                _, cy_top  = _mapear(0, val)
+                for row in range(min(cy_base, ALTO - 1), max(cy_top - 1, 0), -1):
+                    for c in range(col_ini, min(col_ini + ancho_b - 1, ANCHO)):
+                        grid[row][c] = marca
+
+        elif tipo == "histograma":
+            bordes  = xs
+            conteos = ys
+            for i, cnt in enumerate(conteos):
+                cx0, _     = _mapear(bordes[i], 0)
+                cx1, _     = _mapear(bordes[i + 1], 0)
+                _, cy_base = _mapear(0, ry[0])
+                _, cy_top  = _mapear(0, cnt)
+                for row in range(cy_top, cy_base + 1):
+                    for c in range(cx0, cx1):
+                        if 0 <= row < ALTO and 0 <= c < ANCHO:
+                            grid[row][c] = marca
+
+    for row in range(ALTO):
+        grid[row][0] = "|"
+    for col in range(ANCHO):
+        grid[ALTO - 1][col] = "-"
+    grid[ALTO - 1][0] = "+"
+
+    sep = "─" * (ANCHO + 4)
+    print()
+    if lienzo.titulo:
+        print(f"  {'NeuralX Plot':^{ANCHO}}")
+        print(f"  {lienzo.titulo:^{ANCHO}}")
+    print(f"  {sep}")
+    label_y = lienzo.etiqueta_y
+    for i, fila in enumerate(grid):
+        if i == ALTO // 2 and label_y:
+            prefijo = f"{label_y[:3]:>3} "
+        elif i == 0:
+            prefijo = f"{ry[1]:>6.2f} "
+        elif i == ALTO - 1:
+            prefijo = f"{ry[0]:>6.2f} "
+        else:
+            prefijo = "       "
+        print(prefijo + "".join(fila))
+    print(f"{'':>7}{rx[0]:<10}{lienzo.etiqueta_x:^{ANCHO - 20}}{rx[1]:>10}")
+    print(f"  {sep}")
+
+    if lienzo.mostrar_leyenda:
+        print("\n  Leyenda:")
+        for idx, serie in enumerate(lienzo.series):
+            marca = serie["color"] if len(serie["color"]) == 1 \
+                    else MARCAS[idx % len(MARCAS)]
+            etiq  = serie["etiqueta"] or f"serie {idx + 1}"
+            print(f"    {marca}  {etiq}")
+    print()
+
+
+# ── Exportación SVG ──────────────────────────────────────────────────
+
+def _generar_svg(lienzo):
+    if not lienzo.series:
+        return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+
+    rx, ry = _calcular_limites(lienzo)
+    gw     = SVG_W - PAD_L - PAD_R
+    gh     = SVG_H - PAD_T - PAD_B
+
+    def sx(x): return PAD_L + (x - rx[0]) / (rx[1] - rx[0]) * gw
+    def sy(y): return PAD_T + gh - (y - ry[0]) / (ry[1] - ry[0]) * gh
+
+    p = []
+    p.append(
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{SVG_W}" height="{SVG_H}" '
+        f'style="background:#1e1e2e;font-family:monospace">'
+    )
+
+    if lienzo.mostrar_cuadricula:
+        for i in range(5):
+            yv = ry[0] + i * (ry[1] - ry[0]) / 4
+            yp = sy(yv)
+            p.append(
+                f'<line x1="{PAD_L}" y1="{yp:.1f}" '
+                f'x2="{PAD_L+gw}" y2="{yp:.1f}" '
+                f'stroke="#444" stroke-dasharray="4"/>'
+            )
+
+    p.append(
+        f'<line x1="{PAD_L}" y1="{PAD_T}" x2="{PAD_L}" y2="{PAD_T+gh}" '
+        f'stroke="#aaa" stroke-width="1.5"/>'
+        f'<line x1="{PAD_L}" y1="{PAD_T+gh}" x2="{PAD_L+gw}" y2="{PAD_T+gh}" '
+        f'stroke="#aaa" stroke-width="1.5"/>'
+    )
+
+    if lienzo.titulo:
+        p.append(
+            f'<text x="{SVG_W//2}" y="25" text-anchor="middle" '
+            f'fill="#cdd6f4" font-size="14" font-weight="bold">'
+            f'{lienzo.titulo}</text>'
+        )
+    if lienzo.etiqueta_x:
+        p.append(
+            f'<text x="{SVG_W//2}" y="{SVG_H-8}" text-anchor="middle" '
+            f'fill="#a6adc8" font-size="11">{lienzo.etiqueta_x}</text>'
+        )
+    if lienzo.etiqueta_y:
+        p.append(
+            f'<text transform="rotate(-90)" x="-{SVG_H//2}" y="14" '
+            f'text-anchor="middle" fill="#a6adc8" font-size="11">'
+            f'{lienzo.etiqueta_y}</text>'
+        )
+
+    for i in range(5):
+        yv = ry[0] + i * (ry[1] - ry[0]) / 4
+        yp = sy(yv)
+        p.append(
+            f'<text x="{PAD_L-4}" y="{yp+4:.1f}" text-anchor="end" '
+            f'fill="#a6adc8" font-size="9">{yv:.2f}</text>'
+        )
+
+    for idx, serie in enumerate(lienzo.series):
+        color  = COLORES_SVG[idx % len(COLORES_SVG)]
+        tipo   = serie["tipo"]
+        xs     = serie["xs"]
+        ys     = serie["ys"]
+        xs_num = [x if isinstance(x, (int, float)) else i
+                  for i, x in enumerate(xs)]
+
+        if tipo == "linea":
+            puntos = sorted(zip(xs_num, ys), key=lambda pt: pt[0])
+            coords = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in puntos)
+            p.append(
+                f'<polyline points="{coords}" fill="none" '
+                f'stroke="{color}" stroke-width="2"/>'
+            )
+            for x, y in puntos:
+                p.append(
+                    f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" '
+                    f'r="3" fill="{color}"/>'
+                )
+
+        elif tipo == "dispersion":
+            for x, y in zip(xs_num, ys):
+                p.append(
+                    f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" '
+                    f'r="4" fill="{color}" opacity="0.8"/>'
+                )
+
+        elif tipo == "barras":
+            n  = len(ys)
+            bw = max(4, gw // n - 4)
+            for i, val in enumerate(ys):
+                xp = PAD_L + i * (gw / n) + 4
+                yp = sy(val)
+                h  = sy(ry[0]) - yp
+                p.append(
+                    f'<rect x="{xp:.1f}" y="{yp:.1f}" '
+                    f'width="{bw}" height="{max(0,h):.1f}" '
+                    f'fill="{color}" opacity="0.85"/>'
+                )
+
+        elif tipo == "histograma":
+            bordes  = xs
+            conteos = ys
+            for i, cnt in enumerate(conteos):
+                xp  = sx(bordes[i])
+                xp2 = sx(bordes[i + 1])
+                yp  = sy(cnt)
+                h   = sy(ry[0]) - yp
+                p.append(
+                    f'<rect x="{xp:.1f}" y="{yp:.1f}" '
+                    f'width="{max(0,xp2-xp-1):.1f}" height="{max(0,h):.1f}" '
+                    f'fill="{color}" opacity="0.85"/>'
+                )
+
+        if lienzo.mostrar_leyenda and serie.get("etiqueta"):
+            p.append(
+                f'<rect x="{PAD_L+10}" y="{PAD_T+10+idx*18}" '
+                f'width="12" height="12" fill="{color}"/>'
+                f'<text x="{PAD_L+26}" y="{PAD_T+21+idx*18}" '
+                f'fill="#cdd6f4" font-size="11">{serie["etiqueta"]}</text>'
+            )
+
+    p.append('</svg>')
+    return "\n".join(p)
